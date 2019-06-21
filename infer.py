@@ -4,8 +4,11 @@ import cv2
 import os
 from tensorflow.python.keras.layers import Input
 from model import VGG16
+from utils import dense_crf
 import matplotlib.pyplot as plt
 plt.switch_backend('agg')
+
+target_size = (256,256)
 
 def rgba2rgb(img):
     return img[:,:,:3]*np.expand_dims(img[:,:,3],2)
@@ -23,7 +26,7 @@ def padding(x):
 def load_image(path):
     x = misc.imread(path)
     if x.shape[2] == 4:
-       x = rgba2rgb(x)
+        x = rgba2rgb(x)
     sh = x.shape
     # Zero-center by mean pixel
     g_mean = np.array(([103.939,116.779,123.68])).reshape([1,1,3])
@@ -58,53 +61,59 @@ def laplace_edge(x):
     edge = np.array(edge, dtype=np.uint8)
     return edge
 
-os.environ["CUDA_DEVICE_ORDER"] = "PCI_BUS_ID"
-os.environ["CUDA_VISIBLE_DEVICES"] = "0"
 
-model_name = 'model/PFA_00050.h5'
-
-target_size = (256,256)
-
-dropout = False
-with_CPFE = True
-with_CA = True
-with_SA = True
-
-if target_size[0 ] % 32 != 0 or target_size[1] % 32 != 0:
-    raise ValueError('Image height and wight must be a multiple of 32')
-
-model_input = Input(shape=(target_size[0],target_size[1],3))
-model = VGG16(model_input,dropout=dropout, with_CPFE=with_CPFE, with_CA=with_CA, with_SA=with_SA)
-model.load_weights(model_name,by_name=True)
-
-for layer in model.layers:
-    layer.trainable = False
-'''
-image_path = 'image/2.jpg'
-img, shape = load_image(image_path)
-img = np.array(img, dtype=np.float32)
-sa = model.predict(img)
-sa = getres(sa, shape)
-plt.title('saliency')
-plt.subplot(131)
-plt.imshow(cv2.imread(image_path))
-plt.subplot(132)
-plt.imshow(sa,cmap='gray')
-plt.subplot(133)
-edge = laplace_edge(sa)
-plt.imshow(edge,cmap='gray')
-plt.savefig(os.path.join('./train_1000_output','alpha.png'))
-#misc.imsave(os.path.join('./train_1000_output','alpha.png'), sa)
-'''
-HOME = os.path.expanduser('~')
-rgb_folder = os.path.join(HOME, 'data/train_1000/image_1000')
-output_folder = './train_1000_output'
-rgb_names = os.listdir(rgb_folder)
-print(rgb_folder, "\nhas {0} pics.".format(len(rgb_names)))
-for rgb_name in rgb_names:    
-    if rgb_name[-4:] == '.jpg':
-        img, shape = load_image(os.path.join(rgb_folder, rgb_name))
-        img = np.array(img, dtype=np.float32)
-        sa = model.predict(img)
-        sa = getres(sa, shape)
-        misc.imsave(os.path.join(output_folder, rgb_name), sa)
+if __name__ == "__main__":
+    os.environ["CUDA_DEVICE_ORDER"] = "PCI_BUS_ID"
+    os.environ["CUDA_VISIBLE_DEVICES"] = "0"
+    
+    model_name = 'model/PFA_00050.h5'
+    
+    with_crf = True 
+    dropout = False
+    with_CPFE = True
+    with_CA = True
+    with_SA = True
+    
+    if target_size[0 ] % 32 != 0 or target_size[1] % 32 != 0:
+        raise ValueError('Image height and wight must be a multiple of 32')
+    
+    model_input = Input(shape=(target_size[0],target_size[1],3))
+    model = VGG16(model_input,dropout=dropout, with_CPFE=with_CPFE, with_CA=with_CA, with_SA=with_SA)
+    model.load_weights(model_name,by_name=True)
+    
+    for layer in model.layers:
+        layer.trainable = False
+    '''
+    image_path = 'image/2.jpg'
+    img, shape = load_image(image_path)
+    img = np.array(img, dtype=np.float32)
+    sa = model.predict(img)
+    sa = getres(sa, shape)
+    plt.title('saliency')
+    plt.subplot(131)
+    plt.imshow(cv2.imread(image_path))
+    plt.subplot(132)
+    plt.imshow(sa,cmap='gray')
+    plt.subplot(133)
+    edge = laplace_edge(sa)
+    plt.imshow(edge,cmap='gray')
+    plt.savefig(os.path.join('./train_1000_output','alpha.png'))
+    #misc.imsave(os.path.join('./train_1000_output','alpha.png'), sa)
+    '''
+    #HOME = os.path.expanduser('~')
+    #rgb_folder = os.path.join(HOME, 'data/sku_wdis_imgs/sku_wdis_imgs_12')
+    rgb_folder = './details'
+    output_folder = './train_1000_output'
+    rgb_names = os.listdir(rgb_folder)
+    print(rgb_folder, "\nhas {0} pics.".format(len(rgb_names)))
+    for rgb_name in rgb_names:    
+        if rgb_name[-4:] == '.jpg':
+            img_org = misc.imread(os.path.join(rgb_folder, rgb_name))
+            img, shape = load_image(os.path.join(rgb_folder, rgb_name))
+            img = np.array(img, dtype=np.float32)
+            sa = model.predict(img)
+            sa = getres(sa, shape)
+            if with_crf:
+                sa = dense_crf(np.expand_dims(np.expand_dims(sa,0),3), np.expand_dims(img_org,0))
+                sa = sa[0,:,:,0]
+            misc.imsave(os.path.join(output_folder, rgb_name), sa)
