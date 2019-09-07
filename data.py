@@ -60,19 +60,63 @@ def getTrainGenerator(file_path, target_size, batch_size, israndom=False):
                 y = y[:,:,0]
             y = y/y.max()
             if israndom:
+				# TODO: use random lines to enhance data
                 x,y = random_crop(x,y)
                 x,y = random_rotate(x,y)
                 x = random_light(x)
 
-            x = x[..., ::-1]
+            x = x[..., ::-1]  # BGR -> RGB
             # Zero-center by mean pixel
             x[..., 0] -= 103.939
             x[..., 1] -= 116.779
             x[..., 2] -= 123.68
+			# zero padding for different size img
             x, y = padding(x, y)
-
             x = cv2.resize(x, target_size, interpolation=cv2.INTER_LINEAR)
             y = cv2.resize(y, target_size, interpolation=cv2.INTER_NEAREST)
+
+            y = y.reshape((target_size[0],target_size[1],1))
+            batch_x.append(x)
+            batch_y.append(y)
+            if len(batch_x) == batch_size:
+                yield (np.array(batch_x, dtype=np.float32), np.array(batch_y, dtype=np.float32))
+                batch_x = []
+                batch_y = []
+
+def getTestGenerator(file_path, target_size, batch_size, israndom=False):
+    f = open(file_path, 'r')
+    trainlist = f.readlines()
+    f.close()
+    while True:
+        #random.shuffle(trainlist)
+        batch_x = []
+        batch_y = []
+        for name in trainlist:
+            p = name.strip('\r\n').split(',')
+            img_path = p[0]
+            mask_path = p[1]
+            x = cv2.imread(img_path)
+            y = cv2.imread(mask_path)
+            x = np.array(x, dtype=np.float32)
+            y = np.array(y, dtype=np.float32)
+            if len(y.shape) == 3:
+                y = y[:,:,0]
+            y = y/y.max()
+            x = x[..., ::-1]  # BGR -> RGB
+            # Zero-center by mean pixel
+            x[..., 0] -= 103.939
+            x[..., 1] -= 116.779
+            x[..., 2] -= 123.68
+			# zero padding for different size img
+            try:
+                x, y = padding(x, y)
+            except:
+                print(name)
+                print(x.shape, y.shape)
+                continue
+            x = cv2.resize(x, target_size, interpolation=cv2.INTER_LINEAR)
+            y = cv2.resize(y, target_size, interpolation=cv2.INTER_NEAREST)
+
             y = y.reshape((target_size[0],target_size[1],1))
             batch_x.append(x)
             batch_y.append(y)
@@ -85,7 +129,7 @@ def ge_train_pair(filename, train_dir, image_dir, mask_dir):
     f = open(filename,'w')
     path = os.path.join(train_dir, image_dir)
     name = os.listdir(path)
-    print(path, "\nhas {0} images.".format(len(name)))
+    print(path, "maybe \nhas {0} images.".format(len(name)))
     for n in name:
         if n[-4:] == '.jpg':
             f.writelines([os.path.join(train_dir, image_dir, str(n)), ',',

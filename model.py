@@ -1,6 +1,9 @@
 from tensorflow.python.keras.models import *
 from attention import *
 from bilinear_upsampling import BilinearUpsampling
+from utils import dense_crf
+import cv2
+import numpy as np
 
 
 class BatchNorm(BatchNormalization):
@@ -117,6 +120,28 @@ def VGG16(img_input, dropout=False, with_CPFE=False, with_CA=False, with_SA=Fals
         C12 = Multiply(name='C12_atten_mutiply')([SA, C12])
     fea = Concatenate(name='fuse_concat',axis=-1)([C12, C345])
     sa = Conv2D(1, (3, 3), padding='same', name='sa')(fea)
+
+    if False:
+        sa = tf.sigmoid(sa)*255
+        sa = dense_crf(np.expand_dims(np.expand_dims(sa,0),3), np.expand_dims(img_input,0))
+        sa = sa[0,:,:,0]
+        sa = sa * (sa>50)  # filter not-so-saliency regions
+        threshold_gray = 2
+        connectivity = 8
+        sa = sa.astype(np.uint8)
+        _,sa_bi = cv2.threshold(sa,threshold_gray,255,0)
+        output = cv2.connectedComponentsWithStats(sa_bi, connectivity, cv2.CV_32S)
+        stats = output[2]
+        # a postprocess for commidity object only
+        area_img = img_org.shape[0] * img_org.shape[1]
+        threshold_area = 100  # set the region to non-saliency, that area is so small
+        for rgns in range(1,stats.shape[0]):
+            if area_img / stats[rgns,4] <= threshold_area:
+                continue
+            x1, y1 = stats[rgns,0], stats[rgns,1] 
+            x2, y2 = x1+stats[rgns,2], y1+stats[rgns,3]
+            sa[y1:y2,x1:x2] = 0
+        _,sa = cv2.threshold(sa,threshold_gray,255,0)
 
     model = Model(inputs=img_input, outputs=sa, name="BaseModel")
     return model

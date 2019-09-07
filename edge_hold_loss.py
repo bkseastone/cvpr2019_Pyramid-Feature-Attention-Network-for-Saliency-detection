@@ -30,9 +30,21 @@ def EdgeHoldLoss(y_true, y_pred):
     y_pred_edge = tfLaplace(y_pred2)
     y_pred_edge = logit(y_pred_edge)
     edge_loss = K.mean(tf.nn.sigmoid_cross_entropy_with_logits(labels=y_true_edge,logits=y_pred_edge), axis=-1)
-    saliency_pos = 1.12
+    saliency_pos = 1.12  # for sample-balance
     saliency_loss = K.mean(tf.nn.weighted_cross_entropy_with_logits(y_true,y_pred,saliency_pos), axis=-1)
-    return 0.7*saliency_loss+0.3*edge_loss
+    alpha = 0.7  # hyperparam
+    return alpha*saliency_loss+(1-alpha)*edge_loss
 
-
+def FLoss(y_true, y_pred):
+    log_like = False
+    beta = 0.3
+    y_pred = tf.sigmoid(y_pred)
+    EPS = 1e-16
+    TP = K.sum(tf.multiply(y_true, y_pred))
+    H = beta * K.sum(y_true) + K.sum(y_pred)
+    fmeasure = (1 + beta) * TP / (H + EPS)
+    if log_like:
+        return -tf.log(fmeasure + EPS)
+    else:
+        return (1 - fmeasure)
 

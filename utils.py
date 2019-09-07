@@ -19,13 +19,19 @@ def rec(y_true, y_pred):
     S = K.sum(y_true)
     return TP / S
 
+def F_value(y_true, y_pred):
+	return ((1+0.3)*pre(y_true,y_pred)*rec(y_true,y_pred))/(0.3*pre(y_true,y_pred)+rec(y_true,y_pred))
+
+def MAE(y_true, y_pred):
+	return 1-acc(y_true, y_pred)
+
 def _to_tensor(x, dtype):
     return tf.convert_to_tensor(x, dtype=dtype)
 
 def sigmoid(x):
     return 1 / (1 + np.exp(-x))
 
-def dense_crf(probs, img=None, n_iters=10, 
+def dense_crf(probs, img=None, n_iters=2, 
               sxy_gaussian=(1,1), compat_gaussian=4,
               kernel_gaussian=dcrf.DIAG_KERNEL,
               normalisation_gaussian=dcrf.NORMALIZE_SYMMETRIC,
